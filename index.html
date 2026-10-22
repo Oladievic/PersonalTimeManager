@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="light dark" />
+<title>Пробка — доска времени</title>
+<meta name="description" content="Второй мозг на пробковой доске: задачи, дедлайны, шаблоны, учёба, проекты и личное. Работает офлайн." />
+<meta name="theme-color" content="#2E2119" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="assets/icon-192.png" />
+<link rel="stylesheet" href="assets/fonts/fonts.css" />
+<link rel="stylesheet" href="css/app.css" />
+<link rel="stylesheet" href="css/views.css" />
+</head>
+<body>
+
+<svg class="sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-4"/></symbol>
+    <symbol id="i-redo" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h4"/></symbol>
+    <symbol id="i-fit" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle class="dot" cx="5" cy="12" r="1.5"/><circle class="dot" cx="12" cy="12" r="1.5"/><circle class="dot" cx="19" cy="12" r="1.5"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></symbol>
+    <symbol id="i-archive" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10h14V9M10 13h4"/></symbol>
+    <symbol id="i-timer" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 3h6"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="7" r="3"/><path d="M8.2 14.8C11 12 13 12 15.8 9.2"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m5 5 14 14M19 5 5 19"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m4 12 5 5L20 6"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11Z"/><circle cx="12" cy="10" r="2.4"/></symbol>
+    <symbol id="i-clip" viewBox="0 0 24 24"><path d="m20 11-8.5 8.5a5 5 0 0 1-7-7L14 3a3.5 3.5 0 0 1 5 5l-9.5 9.5a2 2 0 0 1-2.8-2.8L16 6"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-1.5 4L16 12H5"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m0 0 5-5m-5 5-5-5M4 21h16"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4m0 0 5 5m-5-5L7 9M4 21h16"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
+    <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 3v5h-5"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 24 24"><path d="m3 12 9-9h8v8l-9 9-8-8Z"/><circle class="dot" cx="16.5" cy="7.5" r="1.3"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6Z"/><path d="M14 3v4h4"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5Z"/></symbol>
+    <symbol id="i-board" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="1"/><path d="M12 18v3M8 21h8"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L20 8l-4-4L4 16Z"/><path d="m14 6 4 4"/></symbol>
+    <symbol id="i-check-square" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="m8 12 3 3 5-6"/></symbol>
+    <symbol id="i-briefcase" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18M10 12v2h4v-2"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 4h7a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H4Z"/><path d="M20 4h-7a3 3 0 0 0-3 3v13a2 2 0 0 1 2-2h8Z"/></symbol>
+    <symbol id="i-rocket" viewBox="0 0 24 24"><path d="M12 3c3 1.5 5 4.5 5 8 0 2-1 4-2 5H9c-1-1-2-3-2-5 0-3.5 2-6.5 5-8Z"/><circle cx="12" cy="9" r="1.8"/><path d="M9 16c-1 2-1 3-1 5 2 0 3-.5 4-2M15 16c1 2 1 3 1 5-2 0-3-.5-4-2"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-7-4.5-7-9.5A4.5 4.5 0 0 1 12 7a4.5 4.5 0 0 1 7 3.5c0 5-7 9.5-7 9.5Z"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol>
+    <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M5 5h14l2 8v6H3v-6Z"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3 2.7 5.7 6.3.9-4.6 4.4 1.1 6.3L12 17.3 6.5 20.3l1.1-6.3L3 9.6l6.3-.9Z"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6M10 20a2 2 0 0 0 4 0"/></symbol>
+    <symbol id="i-repeat" viewBox="0 0 24 24"><path d="M4 9V7a3 3 0 0 1 3-3h10l-3-3M20 15v2a3 3 0 0 1-3 3H7l3 3"/><path d="M17 4l3 3M7 20l-3-3"/></symbol>
+    <symbol id="i-filter" viewBox="0 0 24 24"><path d="M3 5h18l-7 8v6l-4 2v-8Z"/></symbol>
+    <symbol id="i-columns" viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="16"/><rect x="14" y="4" width="7" height="16"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7Z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+    <symbol id="i-capture" viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></symbol>
+    <symbol id="i-grip" viewBox="0 0 24 24"><circle class="dot" cx="9" cy="6" r="1.3"/><circle class="dot" cx="15" cy="6" r="1.3"/><circle class="dot" cx="9" cy="12" r="1.3"/><circle class="dot" cx="15" cy="12" r="1.3"/><circle class="dot" cx="9" cy="18" r="1.3"/><circle class="dot" cx="15" cy="18" r="1.3"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.6 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></symbol>
+    <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 3v6M15 3v6M6 9h12v3a6 6 0 0 1-12 0Z"/><path d="M12 18v3"/></symbol>
+  </defs>
+</svg>
+
+<header class="topbar" id="topbar">
+  <button class="icon-btn only-mobile" id="btnSidebar" aria-label="Открыть меню">
+    <svg class="ic"><use href="#i-menu"/></svg>
+  </button>
+  <div class="brand" title="Пробка — доска времени">
+    <span class="brand-pin" aria-hidden="true"></span>
+    <span class="brand-name">Пробка</span>
+  </div>
+  <div class="board-heading">
+    <input class="board-title" id="boardTitle" value="Сегодня" aria-label="Название раздела" spellcheck="false" />
+    <span class="board-sub" id="boardSub">—</span>
+  </div>
+  <div class="topbar-tools">
+    <button class="icon-btn only-desktop" id="btnUndo" title="Отменить · Ctrl+Z" aria-label="Отменить">
+      <svg class="ic"><use href="#i-undo"/></svg>
+    </button>
+    <button class="icon-btn only-desktop" id="btnRedo" title="Повторить · Ctrl+Shift+Z" aria-label="Повторить">
+      <svg class="ic"><use href="#i-redo"/></svg>
+    </button>
+    <div class="zoom-cluster only-desktop" id="zoomCluster">
+      <button data-zoom="out" aria-label="Уменьшить">−</button>
+      <button data-zoom="reset" id="zoomLabel" title="Сбросить масштаб">100%</button>
+      <button data-zoom="in" aria-label="Увеличить">+</button>
+      <button data-zoom="fit" aria-label="Вписать всё" title="Вписать всё"><svg class="ic"><use href="#i-fit"/></svg></button>
+    </div>
+    <span class="save-state" id="saveState"><i></i><span>Сохранено</span></span>
+    <button class="icon-btn only-desktop" id="btnSearch" title="Поиск · Ctrl+K" aria-label="Поиск">
+      <svg class="ic"><use href="#i-search"/></svg>
+    </button>
+    <button class="capture-pill" id="btnCapture" title="Быстрый захват · Ctrl+Shift+A">
+      <svg class="ic"><use href="#i-capture"/></svg><span class="only-desktop">Захват</span>
+    </button>
+    <button class="primary-btn only-desktop" id="btnAddNote">
+      <svg class="ic"><use href="#i-plus"/></svg> <span id="btnAddLabel">Заметка</span>
+    </button>
+    <button class="icon-btn" id="btnMenu" aria-label="Меню" title="Меню и настройки">
+      <svg class="ic"><use href="#i-more"/></svg>
+    </button>
+  </div>
+</header>
+
+<aside class="sidebar" id="sidebar" aria-label="Навигация">
+  <nav class="main-nav" id="mainNav">
+    <button class="nav-item nav-home" data-view="board" title="Главная доска">
+      <svg class="ic"><use href="#i-board"/></svg><span>Доска</span>
+    </button>
+    <div class="nav-sep"></div>
+    <button class="nav-item" data-view="today" title="Сегодня">
+      <svg class="ic"><use href="#i-sun"/></svg><span>Сегодня</span><em class="nav-badge" id="navToday" hidden></em>
+    </button>
+    <button class="nav-item" data-view="tasks" title="Задачи">
+      <svg class="ic"><use href="#i-check-square"/></svg><span>Задачи</span>
+    </button>
+    <button class="nav-item" data-view="calendar" title="Календарь">
+      <svg class="ic"><use href="#i-calendar"/></svg><span>Календарь</span>
+    </button>
+    <button class="nav-item" data-view="inbox" title="Входящие">
+      <svg class="ic"><use href="#i-inbox"/></svg><span>Входящие</span><em class="nav-badge" id="navInbox" hidden></em>
+    </button>
+    <div class="nav-sep"></div>
+    <button class="nav-item nav-sphere" data-view="work" style="--sc:#4E7FA6" title="Работа">
+      <i class="nav-dot"></i><span>Работа</span>
+    </button>
+    <button class="nav-item nav-sphere" data-view="study" style="--sc:#6E9C83" title="Учёба">
+      <i class="nav-dot"></i><span>Учёба</span>
+    </button>
+    <button class="nav-item nav-sphere" data-view="projects" style="--sc:#8A6FA8" title="Проекты">
+      <i class="nav-dot"></i><span>Проекты</span>
+    </button>
+    <button class="nav-item nav-sphere" data-view="life" style="--sc:#C4718E" title="Личное">
+      <i class="nav-dot"></i><span>Личное</span>
+    </button>
+    <div class="nav-sep"></div>
+    <button class="nav-item" data-view="review" title="Обзор">
+      <svg class="ic"><use href="#i-chart"/></svg><span>Обзор</span>
+    </button>
+    <button class="nav-item" data-view="search" title="Поиск">
+      <svg class="ic"><use href="#i-search"/></svg><span>Поиск</span>
+    </button>
+  </nav>
+
+  <div class="side-head">
+    <h2>Доски</h2>
+    <button class="mini-btn" id="btnNewBoard" title="Новая доска" aria-label="Новая доска">
+      <svg class="ic"><use href="#i-plus"/></svg>
+    </button>
+  </div>
+  <nav class="board-list" id="boardList"></nav>
+
+  <div class="side-head">
+    <h2>Фокус</h2>
+    <span class="side-note" id="focusTarget">без задачи</span>
+  </div>
+  <div class="focus-card" id="focusCard">
+    <div class="focus-dial" id="focusDial" style="--p:0">
+      <span id="focusTime">25:00</span>
+    </div>
+    <div class="focus-controls">
+      <button class="round-btn" id="focusStart" aria-label="Старт">
+        <svg class="ic"><use href="#i-play"/></svg>
+      </button>
+      <button class="round-btn ghost" id="focusReset" aria-label="Сброс">↺</button>
+      <select id="focusPreset" aria-label="Длительность">
+        <option value="15">15 мин</option>
+        <option value="25" selected>25 мин</option>
+        <option value="45">45 мин</option>
+        <option value="60">60 мин</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="side-head">
+    <h2>Теги</h2>
+    <button class="side-clear" id="clearTag" hidden>сбросить</button>
+  </div>
+  <div class="tag-cloud" id="tagCloud"></div>
+
+  <div class="side-foot">
+    <button class="side-link" id="btnAgenda">
+      <svg class="ic"><use href="#i-calendar"/></svg> Повестка
+      <span class="badge" id="agendaBadge" hidden>0</span>
+    </button>
+    <button class="side-link" id="btnArchive">
+      <svg class="ic"><use href="#i-archive"/></svg> Архив
+    </button>
+    <button class="side-link only-mobile" id="btnSidebarClose">
+      <svg class="ic"><use href="#i-close"/></svg> Свернуть
+    </button>
+    <div class="storage-line" id="storageLine"><i></i><span id="storageInfo">Локальное хранилище</span></div>
+  </div>
+</aside>
+
+<main class="stage" id="stage" aria-label="Рабочая область">
+  <section class="view-root" id="viewRoot" hidden aria-label="Раздел"></section>
+  <div class="board-frame" id="boardFrame">
+    <div class="world" id="world">
+      <svg class="threads" id="threads" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div class="notes" id="notes"></div>
+    </div>
+  </div>
+  <div class="board-hint" id="boardHint">
+    Двойной клик по доске — новая заметка. Тяни за точку <span class="hint-dot"></span> на наклейке, чтобы протянуть нить.
+  </div>
+</main>
+
+<div class="tool-tray" id="toolTray" hidden aria-label="Действия с заметкой">
+  <div class="tray-colors" id="trayColors"></div>
+  <span class="tray-sep"></span>
+  <button class="tray-btn" data-note-act="fontMinus" title="Меньше шрифт">A−</button>
+  <button class="tray-btn" data-note-act="fontPlus" title="Больше шрифт">A+</button>
+  <button class="tray-btn" data-note-act="bold" title="Жирный"><b>B</b></button>
+  <button class="tray-btn" data-note-act="italic" title="Курсив"><i>I</i></button>
+  <span class="tray-sep"></span>
+  <button class="tray-btn" data-note-act="link" title="Протянуть нить">
+    <svg class="ic"><use href="#i-link"/></svg>
+  </button>
+  <button class="tray-btn" data-note-act="details" title="Подробности">
+    <svg class="ic"><use href="#i-edit"/></svg>
+  </button>
+  <button class="tray-btn" data-note-act="duplicate" title="Дублировать">
+    <svg class="ic"><use href="#i-copy"/></svg>
+  </button>
+  <button class="tray-btn danger" data-note-act="delete" title="Удалить">
+    <svg class="ic"><use href="#i-trash"/></svg>
+  </button>
+</div>
+
+<aside class="details" id="details" aria-label="Подробности записи" aria-hidden="true">
+  <div class="details-head">
+    <span class="details-tape" aria-hidden="true"></span>
+    <h2>Карточка</h2>
+    <button class="icon-btn ink" id="detailsClose" aria-label="Закрыть">
+      <svg class="ic"><use href="#i-close"/></svg>
+    </button>
+  </div>
+  <div class="details-body">
+    <div class="field">
+      <label for="dContent">Название и заметки</label>
+      <div class="rich rich-detail" id="dContent" contenteditable="true" spellcheck="false"></div>
+      <div class="fmt-row" id="dFmt">
+        <button data-fmt="bold" title="Жирный"><b>B</b></button>
+        <button data-fmt="italic" title="Курсив"><i>I</i></button>
+        <button data-fmt="underline" title="Подчёркнутый"><u>U</u></button>
+        <button data-fmt="strikeThrough" title="Зачёркнутый"><s>S</s></button>
+        <span class="fmt-sep"></span>
+        <button data-fmt="alignLeft" title="По левому краю">L</button>
+        <button data-fmt="alignCenter" title="По центру">C</button>
+        <button data-fmt="alignRight" title="По правому краю">R</button>
+        <span class="fmt-sep"></span>
+        <button data-fmt="hilite" class="hl" title="Маркер">маркер</button>
+        <button data-fmt="clear" title="Убрать формат">×</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Сфера</label>
+      <div class="sphere-picker" id="dSphere">
+        <button data-sphere="work" style="--sc:#4E7FA6">Работа</button>
+        <button data-sphere="study" style="--sc:#6E9C83">Учёба</button>
+        <button data-sphere="projects" style="--sc:#8A6FA8">Проекты</button>
+        <button data-sphere="life" style="--sc:#C4718E">Личное</button>
+      </div>
+    </div>
+
+    <div class="field row-2">
+      <div>
+        <label for="dKind">Тип</label>
+        <select id="dKind"></select>
+      </div>
+      <div>
+        <label for="dStatus">Статус</label>
+        <select id="dStatus"></select>
+      </div>
+    </div>
+
+    <div class="field row-2">
+      <div>
+        <label for="dDue">Срок</label>
+        <input type="datetime-local" id="dDue" />
+      </div>
+      <div class="field-tail">
+        <button class="text-btn" id="dDueClear">убрать</button>
+      </div>
+    </div>
+
+    <div class="field row-2">
+      <div>
+        <label for="dReminder">Напоминание</label>
+        <select id="dReminder"></select>
+      </div>
+      <div>
+        <label for="dRepeat">Повторение</label>
+        <select id="dRepeat"></select>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Оценка времени</label>
+      <div class="chips-row" id="dEstimate">
+        <button data-est="5">5 мин</button>
+        <button data-est="15">15</button>
+        <button data-est="30">30</button>
+        <button data-est="60">1 ч</button>
+        <button data-est="120">2 ч</button>
+        <button data-est="0">—</button>
+      </div>
+    </div>
+
+    <div class="field row-2">
+      <div>
+        <label for="dProject">Проект</label>
+        <select id="dProject"></select>
+      </div>
+      <div>
+        <label for="dSubject">Предмет</label>
+        <input id="dSubject" placeholder="для учёбы" autocomplete="off" />
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="dUrl">Ссылка</label>
+      <div class="input-with-btn">
+        <input id="dUrl" type="url" placeholder="https://…" autocomplete="off" />
+        <button class="mini-open" id="dOpenUrl" title="Открыть ссылку" aria-label="Открыть ссылку">↗</button>
+      </div>
+    </div>
+
+    <div class="field" id="dStageWrap" hidden>
+      <label for="dStage" id="dStageLabel">Этап</label>
+      <select id="dStage"></select>
+    </div>
+
+    <div class="field row-2" id="dEventWrap" hidden>
+      <div>
+        <label for="dEventDate">Дата события</label>
+        <input type="datetime-local" id="dEventDate" />
+      </div>
+      <div class="field-tail"><button class="text-btn" id="dEventClear">убрать</button></div>
+    </div>
+
+    <div class="field" id="dMoodWrap" hidden>
+      <label for="dMood">Настроение</label>
+      <input id="dMood" placeholder="спокойно, бодро, устал…" autocomplete="off" />
+    </div>
+
+    <div class="field">
+      <label>Метки</label>
+      <div class="flag-row" id="dFlags">
+        <button class="flag-toggle" id="dTop3" data-flag="top3">★ 3 главных</button>
+        <button class="flag-toggle" id="dImportant" data-flag="important">Важно</button>
+        <button class="flag-toggle" id="dFavorite" data-flag="favorite">Избранное</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Приоритет</label>
+      <div class="segmented" id="dPriority">
+        <button data-p="0">нет</button>
+        <button data-p="1">низкий</button>
+        <button data-p="2">средний</button>
+        <button data-p="3">высокий</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="dTags">Теги</label>
+      <input id="dTags" placeholder="учёба, срочно, оплата" autocomplete="off" />
+      <div class="tag-suggest" id="dTagSuggest"></div>
+    </div>
+
+    <div class="field">
+      <label>Чек-лист <span class="count" id="dCheckCount"></span></label>
+      <div class="checklist" id="dChecklist"></div>
+      <input class="inline-add" id="dNewItem" placeholder="+ добавить пункт" autocomplete="off" />
+    </div>
+
+    <div class="field">
+      <label>Файлы <span class="count" id="dFileCount"></span></label>
+      <div class="file-list" id="dFiles"></div>
+      <button class="text-btn add-file" id="dAddFile">
+        <svg class="ic"><use href="#i-clip"/></svg> Прикрепить файл
+      </button>
+      <input type="file" id="dFileInput" multiple hidden />
+    </div>
+
+    <details class="field appearance" id="dAppearance">
+      <summary>Вид наклейки</summary>
+      <div class="appearance-grid">
+        <div class="palette" id="dPalette"></div>
+        <div class="row-3">
+          <label class="mini-label">Шрифт
+            <select id="dFont">
+              <option value="hand">Рукописный</option>
+              <option value="caveat">Крупный почерк</option>
+              <option value="ui">Печатный</option>
+              <option value="mono">Моноширинный</option>
+            </select>
+          </label>
+          <label class="mini-label">Размер
+            <input type="range" id="dSize" min="11" max="34" step="1" />
+          </label>
+          <label class="mini-label">Наклон
+            <input type="range" id="dRot" min="-20" max="20" step="0.5" />
+          </label>
+        </div>
+        <div class="row-2">
+          <label class="mini-label">Крепление
+            <select id="dPin">
+              <option value="tape">Скотч</option>
+              <option value="pin">Кнопка</option>
+              <option value="none">Без крепления</option>
+            </select>
+          </label>
+          <label class="mini-label">Тень
+            <select id="dShadow">
+              <option value="soft">Мягкая</option>
+              <option value="flat">Плоская</option>
+              <option value="lifted">Приподнята</option>
+            </select>
+          </label>
+        </div>
+      </div>
+    </details>
+
+    <div class="field">
+      <label for="dBoard">Доска</label>
+      <select id="dBoard"></select>
+    </div>
+
+    <div class="details-actions">
+      <button class="secondary-btn" id="dDone"><svg class="ic"><use href="#i-check"/></svg> Готово</button>
+      <button class="secondary-btn" id="dDup"><svg class="ic"><use href="#i-copy"/></svg> Дублировать</button>
+      <button class="secondary-btn" id="dArchiveNote"><svg class="ic"><use href="#i-archive"/></svg> В архив</button>
+      <button class="secondary-btn danger" id="dDelete"><svg class="ic"><use href="#i-trash"/></svg> Удалить</button>
+    </div>
+    <div class="details-meta" id="dMeta"></div>
+  </div>
+</aside>
+
+<nav class="dock only-mobile" id="dock" aria-label="Меню приложения">
+  <button data-dock="today"><svg class="ic"><use href="#i-sun"/></svg><span>Сегодня</span></button>
+  <button data-dock="tasks"><svg class="ic"><use href="#i-check-square"/></svg><span>Задачи</span></button>
+  <button class="dock-add" data-dock="capture" aria-label="Быстрый захват"><svg class="ic"><use href="#i-capture"/></svg></button>
+  <button data-dock="inbox"><svg class="ic"><use href="#i-inbox"/></svg><span>Входящие</span></button>
+  <button data-dock="board"><svg class="ic"><use href="#i-board"/></svg><span>Доски</span></button>
+</nav>
+
+<div class="scrim" id="scrim" hidden></div>
+<div class="modal-root" id="modalRoot"></div>
+<div class="menu-pop" id="menuPop" hidden></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<div class="capture-root" id="captureRoot" hidden></div>
+
+<input type="file" id="importInput" accept=".json,.probka,application/json" hidden />
+
+<script src="js/util.js"></script>
+<script src="js/store.js"></script>
+<script src="js/model.js"></script>
+<script src="js/sync.js"></script>
+<script src="js/board.js"></script>
+<script src="js/panels.js"></script>
+<script src="js/overlays.js"></script>
+<script src="js/views-core.js"></script>
+<script src="js/views-life.js"></script>
+<script src="js/tools.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

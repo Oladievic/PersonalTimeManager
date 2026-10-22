@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Пробка — доска времени">
+  <defs>
+    <linearGradient id="frame" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4d3423"/>
+      <stop offset=".55" stop-color="#2e1f15"/>
+      <stop offset="1" stop-color="#1b110b"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="170%" height="180%">
+      <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#2a1a0e" flood-opacity=".45"/>
+    </filter>
+    <filter id="grain">
+      <feTurbulence type="fractalNoise" baseFrequency=".8" numOctaves="3" stitchTiles="stitch"/>
+      <feColorMatrix values="1 0 0 0 .24  0 1 0 0 .18  0 0 1 0 .12  0 0 0 .14 0"/>
+    </filter>
+    <clipPath id="corkClip"><rect x="52" y="52" width="408" height="408" rx="84"/></clipPath>
+  </defs>
+  <rect x="8" y="8" width="496" height="496" rx="116" fill="url(#frame)"/>
+  <rect x="26" y="26" width="460" height="460" rx="102" fill="none" stroke="#6f4a30" stroke-width="5" opacity=".7"/>
+  <rect x="52" y="52" width="408" height="408" rx="84" fill="#be8b5e"/>
+  <rect x="52" y="52" width="408" height="408" rx="84" fill="#8a5f3c" filter="url(#grain)" clip-path="url(#corkClip)" opacity=".55"/>
+  <rect x="52" y="52" width="408" height="408" rx="84" fill="none" stroke="#7b5032" stroke-width="4" opacity=".55"/>
+
+  <g filter="url(#shadow)">
+    <g transform="rotate(8 184 240)">
+      <rect x="94" y="126" width="170" height="206" rx="3" fill="#ffe284"/>
+      <rect x="151" y="116" width="72" height="22" rx="1" fill="#f1dfb6" opacity=".82"/>
+      <g fill="#3c2e12" opacity=".36">
+        <rect x="118" y="168" width="118" height="6" rx="3"/>
+        <rect x="118" y="196" width="94" height="6" rx="3"/>
+        <rect x="118" y="224" width="120" height="6" rx="3"/>
+      </g>
+    </g>
+    <g transform="rotate(-7 330 278)">
+      <rect x="246" y="158" width="176" height="210" rx="3" fill="#bbdff4"/>
+      <rect x="304" y="148" width="76" height="22" rx="1" fill="#f1dfb6" opacity=".82"/>
+      <g fill="#123140" opacity=".32">
+        <rect x="270" y="204" width="124" height="6" rx="3"/>
+        <rect x="270" y="232" width="100" height="6" rx="3"/>
+        <rect x="270" y="260" width="128" height="6" rx="3"/>
+      </g>
+    </g>
+    <g transform="rotate(4 256 360)">
+      <rect x="178" y="292" width="152" height="172" rx="3" fill="#f9bcc7"/>
+      <rect x="226" y="282" width="66" height="22" rx="1" fill="#f1dfb6" opacity=".8"/>
+      <g fill="#401e24" opacity=".3">
+        <rect x="200" y="332" width="104" height="6" rx="3"/>
+        <rect x="200" y="360" width="82" height="6" rx="3"/>
+      </g>
+    </g>
+    <g>
+      <circle cx="334" cy="204" r="14" fill="#8a6631"/>
+      <circle cx="331" cy="200" r="8" fill="#d6ae6d"/>
+      <circle cx="329" cy="197" r="3" fill="#f8e1b6" opacity=".8"/>
+    </g>
+  </g>
+</svg>
