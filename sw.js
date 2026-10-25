@@ -1,5 +1,5 @@
 /* Пробка — офлайн-оболочка PWA */
-const VERSION = "probka-v1.1.5";
+const VERSION = "probka-v1.2.0";
 const CORE = [
   "./",
   "index.html",

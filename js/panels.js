@@ -1000,9 +1000,11 @@
 
   function openSidebar() {
     $("#sidebar").classList.add("open");
+    document.body.classList.add("side-open");
   }
   function closeSidebar() {
     $("#sidebar").classList.remove("open");
+    document.body.classList.remove("side-open");
   }
 
   // expose detail helpers used from board/model

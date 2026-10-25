@@ -26,7 +26,7 @@
     document.body.classList.toggle("dark", next === "dark");
     document.documentElement.style.colorScheme = next;
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", next === "dark" ? "#1B1713" : "#2E2119");
+    if (meta) meta.setAttribute("content", next === "dark" ? "#171310" : "#FBF8F1");
     try { localStorage.setItem("probka.theme", next); } catch (e) { /* ignore */ }
     TB.model.saveSoon();
   }
@@ -349,7 +349,10 @@
     $$("#mainNav [data-view]").forEach((b) => {
       b.addEventListener("click", () => {
         TB.model.setView(b.dataset.view);
-        if (window.innerWidth <= 860) $("#sidebar").classList.remove("open");
+        if (window.innerWidth <= 860) {
+          $("#sidebar").classList.remove("open");
+          document.body.classList.remove("side-open");
+        }
       });
     });
 
@@ -568,6 +571,8 @@
     doc.settings.theme = theme;
     document.body.classList.toggle("dark", theme === "dark");
     document.documentElement.style.colorScheme = theme;
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeMeta) themeMeta.setAttribute("content", theme === "dark" ? "#171310" : "#FBF8F1");
 
     TB.panels.init();
     TB.board.init();
