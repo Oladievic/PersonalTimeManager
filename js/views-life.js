@@ -165,7 +165,7 @@
   }
 
   function templateDialog(n) {
-    const lines = U.plainText(n.html).split("\n").filter(Boolean);
+    const lines = U.noteText(n).split("\n").filter(Boolean);
     const raw = lines.join("\n");
     const names = Array.from(new Set((raw.match(/\{([^{}]+)\}/g) || []).map((s) => s.slice(1, -1))));
     const body = document.createElement("div");
@@ -215,7 +215,7 @@
   /* ------------------------------ работа ------------------------------ */
 
   function templateCard(n) {
-    const text = U.plainText(n.html);
+    const text = U.noteText(n);
     const tags = (n.tags || []).slice(0, 3).map((t) => '<span class="kind-chip">#' + esc(t) + "</span>").join("");
     return '<article class="tpl-card" data-open="' + esc(n.id) + '" data-filter-item data-search="' +
       esc((U.titleOfNote(n) + " " + text + " " + (n.tags || []).join(" ")).toLowerCase()) + '" style="--sc:' +
@@ -320,13 +320,13 @@
         section("Портфолио", "Проекты и работы для резюме",
           (portfolio.length ? '<div class="portfolio-grid">' + portfolio.map((n) =>
             '<div class="portfolio-card" data-open="' + esc(n.id) + '" style="--sc:#6E9C83"><h3>' + esc(U.titleOfNote(n)) +
-            "</h3><p>" + esc(U.plainText(n.html).slice(0, 140)) + "</p>" +
+            "</h3><p>" + esc(U.noteText(n).slice(0, 140)) + "</p>" +
             (n.url ? '<a href="' + esc(n.url) + '" target="_blank" rel="noopener">' + esc(n.url) + "</a>" : "") + "</div>").join("") + "</div>"
             : empty("Портфолио пустое. Добавьте проект или ссылку.")) +
           btn("Добавить работу", "new-portfolio", { icon: "i-plus" })) +
         section("Конспекты и ссылки", "Быстрый доступ к материалам",
           (links.length ? links.map((n) => '<div class="link-row" data-open="' + esc(n.id) + '"><div class="tt"><b>' +
-            esc(U.titleOfNote(n)) + "</b><span>" + esc(U.plainText(n.html).slice(0, 90)) + "</span></div><span>↗</span></div>").join("")
+            esc(U.titleOfNote(n)) + "</b><span>" + esc(U.noteText(n).slice(0, 90)) + "</span></div><span>↗</span></div>").join("")
             : empty("Ссылок нет."))) +
       "</div></div>";
   }
@@ -340,7 +340,7 @@
     const stage = (TB.PROJECT_STAGES.find((s) => s.id === (p.meta || {}).stage) || TB.PROJECT_STAGES[0]).name;
     return '<article class="proj-card" data-open="' + esc(p.id) + '" style="--sc:#8A6FA8">' +
       '<div class="proj-card-head"><h3>' + esc(U.titleOfNote(p)) + '</h3><span class="proj-stage">' + esc(stage) + "</span></div>" +
-      '<div class="proj-goal">' + esc(U.plainText(p.html).split("\n").slice(1).join(" ") || "Без описания") + "</div>" +
+      '<div class="proj-goal">' + esc(U.noteText(p).split("\n").slice(1).join(" ") || "Без описания") + "</div>" +
       '<div class="proj-progress"><i style="width:' + pct + '%"></i></div>' +
       '<div class="proj-foot"><span>' + done + " / " + tasks.length + " задач</span><span>" +
       (p.due ? esc((U.dueInfo(p.due) || {}).label || "") : "без срока") + "</span></div></article>";
@@ -421,7 +421,7 @@
           (journal.length ? '<div class="journal-list">' + journal.slice(0, 12).map((n) => '<div class="journal-card" data-open="' + esc(n.id) + '" style="--sc:#C4718E">' +
             '<div class="when">' + esc(U.fmtDate(n.updated || n.created)) +
             ((n.meta || {}).mood ? ' · <span class="mood">' + esc(n.meta.mood) + "</span>" : "") + "</div>" +
-            '<div class="txt">' + esc(U.plainText(n.html).slice(0, 260)) + "</div></div>").join("") + "</div>"
+            '<div class="txt">' + esc(U.noteText(n).slice(0, 260)) + "</div></div>").join("") + "</div>"
             : empty("Журнал пуст. Одна строка в день — уже привычка."))) +
       "</div><div class=\"v-col\">" +
         section("Важные даты", "Повторяются каждый год", dates.length

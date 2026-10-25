@@ -14,7 +14,11 @@
     timer: null,
     targetId: null,
     startedAt: 0,
+    endAt: 0,
+    spent: 0,
+    runStartedAt: 0,
   };
+  const FOCUS_KEY = "probka.focus.v1";
 
   function setTheme(theme) {
     const next = theme === "dark" ? "dark" : "light";
@@ -148,43 +152,91 @@
     paintFocus();
   };
 
+  function saveFocusState() {
+    try {
+      localStorage.setItem(FOCUS_KEY, JSON.stringify({
+        total: focus.total,
+        left: Math.max(0, Math.round(focus.left)),
+        running: !!focus.running,
+        targetId: focus.targetId || null,
+        endAt: focus.endAt || 0,
+        spent: Math.max(0, Math.round(focus.spent)),
+        updatedAt: Date.now(),
+      }));
+    } catch (e) { /* private mode */ }
+  }
+
+  function currentSpent() {
+    const live = focus.running && focus.runStartedAt ? (Date.now() - focus.runStartedAt) / 1000 : 0;
+    return Math.max(0, (focus.spent || 0) + live);
+  }
+
+  function pauseFocus() {
+    if (!focus.running) return;
+    focus.left = Math.max(0, Math.ceil((focus.endAt - Date.now()) / 1000));
+    focus.spent = currentSpent();
+    focus.running = false;
+    focus.runStartedAt = 0;
+    focus.endAt = 0;
+    clearInterval(focus.timer);
+    focus.timer = null;
+    paintFocus();
+    saveFocusState();
+  }
+
   function focusTick() {
     if (!focus.running) return;
-    focus.left -= 1;
-    if (focus.left <= 0) {
+    const remaining = Math.max(0, Math.ceil((focus.endAt - Date.now()) / 1000));
+    if (remaining <= 0) {
       focus.left = 0;
       focusDone();
       return;
     }
-    paintFocus();
+    if (remaining !== focus.left) {
+      focus.left = remaining;
+      paintFocus();
+      saveFocusState();
+    }
   }
 
-  function focusDone() {
-    const minutes = Math.round(focus.total / 60);
-    if (focus.targetId) TB.model.logFocus(focus.targetId, minutes);
+  function focusDone(restored) {
+    const minutes = Math.max(1, Math.round((focus.total || 1) / 60));
+    const targetId = focus.targetId;
     focus.running = false;
+    focus.left = 0;
+    focus.spent = focus.total;
+    focus.runStartedAt = 0;
+    focus.endAt = 0;
     clearInterval(focus.timer);
     focus.timer = null;
+    saveFocusState();
+    if (targetId) TB.model.logFocus(targetId, minutes);
     paintFocus();
-    U.beep();
-    U.toast("Фокус " + minutes + " мин завершён. Сделайте паузу.");
+    if (!restored) {
+      U.beep();
+      U.toast("Фокус " + minutes + " мин завершён. Сделайте паузу.");
+    } else {
+      U.toast("Фокус завершился, пока приложение было закрыто.");
+    }
     try {
-      if ("Notification" in window && Notification.permission === "granted") {
+      if (!restored && "Notification" in window && Notification.permission === "granted") {
         new Notification("Пробка · фокус завершён", { body: minutes + " минут позади. Пора размяться.", icon: "assets/icon-192.png" });
       }
     } catch (e) { /* ignore */ }
     setTimeout(() => {
+      if (focus.running) return;
       focus.left = focus.total;
+      focus.spent = 0;
+      focus.startedAt = 0;
       paintFocus();
+      saveFocusState();
     }, 1200);
   }
 
   function focusStart() {
     if (focus.running) {
-      focus.running = false;
-      clearInterval(focus.timer);
-      focus.timer = null;
-      paintFocus();
+      pauseFocus();
+      U.toast("Фокус на паузе");
       return;
     }
     const selected = TB.model.selectedNote();
@@ -194,17 +246,23 @@
       U.toast("Сначала выберите заметку или нажмите «Фокус» в карточке", "warn");
       return;
     }
-    if (focus.left <= 0) focus.left = focus.total;
+    if (focus.left <= 0) {
+      focus.left = focus.total;
+      focus.spent = 0;
+    }
     focus.running = true;
-    focus.startedAt = Date.now();
+    focus.startedAt = focus.startedAt || Date.now();
+    focus.runStartedAt = Date.now();
+    focus.endAt = Date.now() + Math.max(1, focus.left) * 1000;
     clearInterval(focus.timer);
-    focus.timer = setInterval(focusTick, 1000);
+    focus.timer = setInterval(focusTick, 500);
     paintFocus();
+    saveFocusState();
   }
 
   function focusReset() {
-    if (focus.running && focus.startedAt && Date.now() - focus.startedAt > 60000 && focus.targetId) {
-      const mins = Math.round((Date.now() - focus.startedAt) / 60000);
+    if ((focus.running || focus.spent > 0) && focus.targetId) {
+      const mins = Math.round(currentSpent() / 60);
       if (mins >= 1) TB.model.logFocus(focus.targetId, mins);
     }
     focus.running = false;
@@ -214,10 +272,59 @@
     focus.total = (Number(preset && preset.value) || 25) * 60;
     focus.left = focus.total;
     focus.startedAt = 0;
+    focus.endAt = 0;
+    focus.runStartedAt = 0;
+    focus.spent = 0;
+    paintFocus();
+    saveFocusState();
+  }
+
+  function restoreFocus() {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(FOCUS_KEY) || "null"); } catch (e) { saved = null; }
+    if (!saved || !Number.isFinite(Number(saved.total)) || Number(saved.total) <= 0) {
+      focusReset();
+      return;
+    }
+    focus.total = Math.max(60, Math.round(Number(saved.total)));
+    focus.left = U.clamp(Number(saved.left) || focus.total, 0, focus.total);
+    focus.spent = U.clamp(Number(saved.spent) || 0, 0, focus.total);
+    focus.targetId = saved.targetId && TB.model.note(saved.targetId) ? saved.targetId : null;
+    const preset = $("#focusPreset");
+    if (preset) {
+      const minutes = Math.round(focus.total / 60);
+      if (Array.from(preset.options).some((o) => Number(o.value) === minutes)) preset.value = String(minutes);
+    }
+    focus.running = false;
+    focus.timer = null;
+    focus.runStartedAt = 0;
+    focus.startedAt = 0;
+    focus.endAt = 0;
+    if (saved.running && Number(saved.endAt) > Date.now()) {
+      focus.left = Math.max(1, Math.ceil((Number(saved.endAt) - Date.now()) / 1000));
+      const elapsed = Math.max(0, (focus.total - focus.left) - focus.spent);
+      focus.spent += elapsed;
+      focus.running = true;
+      focus.runStartedAt = Date.now() - elapsed * 1000;
+      focus.endAt = Number(saved.endAt);
+      focus.timer = setInterval(focusTick, 500);
+    } else if (saved.running) {
+      focus.left = 0;
+      focus.spent = focus.total;
+      setTimeout(() => focusDone(true), 30);
+    } else if (focus.left <= 0) {
+      // Приложение закрыли между завершением и авто-сбросом.
+      focus.left = focus.total;
+      focus.spent = 0;
+    }
     paintFocus();
   }
 
   TB.focusReset = focusReset;
+  TB.getFocusState = () => ({
+    total: focus.total, left: focus.left, running: focus.running,
+    targetId: focus.targetId, endAt: focus.endAt, spent: currentSpent(),
+  });
 
   function bindFocus() {
     $("#focusStart").addEventListener("click", focusStart);
@@ -226,9 +333,14 @@
       if (focus.running) return;
       focus.total = (Number($("#focusPreset").value) || 25) * 60;
       focus.left = focus.total;
+      focus.spent = 0;
+      focus.startedAt = 0;
+      focus.endAt = 0;
       paintFocus();
+      saveFocusState();
     });
     paintFocus();
+    restoreFocus();
   }
 
   /* ------------------------------ оболочка ------------------------------ */
@@ -312,7 +424,31 @@
         TB.model.redo();
         return;
       }
+      if (mod && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        TB.model.saveNow().then((ok) => {
+          if (!ok) return;
+          U.toast("Сохранено");
+          if (TB.sync && TB.sync.enabled && TB.sync.enabled()) TB.sync.push(true);
+        });
+        return;
+      }
       if (typing) return;
+      if (!mod && !e.altKey && e.key.toLowerCase() === "n") {
+        e.preventDefault();
+        if (TB.model.ui.view === "board") {
+          const r = $("#boardFrame").getBoundingClientRect();
+          TB.board.addNoteAt(r.left + r.width / 2, r.top + r.height / 2);
+        } else {
+          TB.tools.createNoteDialog();
+        }
+        return;
+      }
+      if (e.key === " " && TB.model.ui.view === "board") {
+        e.preventDefault();
+        if (TB.board && TB.board.setSpacePan) TB.board.setSpacePan(true);
+        return;
+      }
       if (e.key === "?" || (e.shiftKey && e.key === "/")) {
         e.preventDefault();
         TB.overlays.openShortcuts();
@@ -333,8 +469,23 @@
       }
     });
 
+    document.addEventListener("keyup", (e) => {
+      if (e.key === " " && TB.board && TB.board.setSpacePan) TB.board.setSpacePan(false);
+    });
+    window.addEventListener("blur", () => {
+      if (TB.board && TB.board.setSpacePan) TB.board.setSpacePan(false);
+    });
+
     window.addEventListener("beforeunload", () => {
+      if (focus.running) {
+        focus.left = Math.max(0, Math.ceil((focus.endAt - Date.now()) / 1000));
+        focus.spent = currentSpent();
+      }
+      saveFocusState();
       TB.model.saveNow();
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden && focus.running) focusTick();
     });
 
     window.addEventListener("resize", U.debounce(() => {
@@ -351,6 +502,37 @@
   }
 
   /* ------------------------------ запуск ------------------------------ */
+
+  async function consumeShare() {
+    let params;
+    try { params = new URLSearchParams(location.search); } catch (e) { return; }
+    if (params.get("shared") !== "1") return;
+    try {
+      if (!("caches" in window)) return;
+      const key = new URL("__probka_share__", location.href.replace(/[?#].*$/, "")).href;
+      const cache = await caches.open("probka-share");
+      const res = await cache.match(key);
+      await cache.delete(key);
+      if (!res) return;
+      const data = await res.json();
+      const parts = [];
+      if (data.title && data.title !== data.text) parts.push(data.title);
+      if (data.text) parts.push(data.text);
+      if (data.url && !parts.some((x) => x.includes(data.url))) parts.push(data.url);
+      const text = parts.join("\n").trim();
+      if (!text) return;
+      TB.model.capture(text);
+      U.toast("Поделились → во Входящие");
+    } catch (err) {
+      console.warn("Пробка: не удалось принять share-target", err);
+    } finally {
+      try {
+        params.delete("shared");
+        const q = params.toString();
+        history.replaceState(null, "", location.pathname + (q ? "?" + q : "") + location.hash);
+      } catch (e) { /* ignore */ }
+    }
+  }
 
   async function boot() {
     let raw = null;
@@ -397,6 +579,7 @@
     TB.sync.init();
 
     refresh("all");
+    await consumeShare();
     updateZoomLabel();
     requestAnimationFrame(() => {
       if (TB.model.ui.view === "board") {

@@ -107,7 +107,7 @@
       if (detailsOpen) {
         const n = TB.model.selectedNote();
         if (!n) this.closeDetails();
-        else if (detailsId !== n.id) this.openDetails(n.id);
+        else if (detailsId !== n.id && TB.model.ui.view !== "board") this.openDetails(n.id);
       }
     },
 
@@ -141,6 +141,7 @@
       const n = TB.model.note(id);
       if (!n) return;
       const wasOpen = detailsOpen;
+      const previousId = detailsId;
       if (!force && wasOpen && detailsId === id) {
         details.classList.add("open");
         return;
@@ -154,7 +155,7 @@
       fillDetails(n);
       if (TB.board) TB.board.select(id);
       this.updateFocusTarget();
-      if (!wasOpen) animateDetailsFrom(source);
+      if (!wasOpen || previousId !== id) animateDetailsFrom(source);
     },
 
     closeDetails() {
@@ -249,6 +250,13 @@
 
     const dContent = $("#dContent");
     dContent.addEventListener("focus", () => { contentDirty = false; });
+    dContent.addEventListener("paste", (e) => {
+      const html = e.clipboardData && e.clipboardData.getData("text/html");
+      if (!html) return;
+      e.preventDefault();
+      const clean = U.sanitizeHtml(html);
+      try { document.execCommand("insertHTML", false, clean); } catch (err) { /* older browsers */ }
+    });
     dContent.addEventListener("input", () => {
       const n = TB.model.note(detailsId);
       if (!n || suppress) return;
@@ -620,7 +628,7 @@
   function fillDetails(n) {
     suppress = true;
     const dContent = $("#dContent");
-    if (document.activeElement !== dContent) dContent.innerHTML = n.html || "";
+    if (document.activeElement !== dContent) dContent.innerHTML = U.sanitizeHtml(n.html || "");
     $("#dDue").value = U.toLocalInput(n.due);
     setPriority(n.priority || 0);
     $("#dTags").value = (n.tags || []).join(", ");

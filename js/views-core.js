@@ -14,6 +14,7 @@
     taskFilter: "all",
     taskMode: "list",
     taskSphere: "",
+    taskLimit: 120,
     calMonth: startOfMonth(new Date()),
     calSelected: TB.dayKey(new Date()),
     searchQuery: "",
@@ -266,7 +267,6 @@
     list = list.filter((n) => !n.done);
     if (f === "today") list = list.filter((n) => n.status === "today" || dayDiff(n.due) === 0);
     else if (f === "week") {
-      const diff = dayDiff(n0(n));
       list = list.filter((n) => {
         const d = dayDiff(n.due);
         return d !== null && d >= 0 && d <= 7;
@@ -275,7 +275,6 @@
     return sortTasks(list);
   }
 
-  function n0() { return null; }
 
   function sortTasks(list) {
     return list.sort((a, b) => {
@@ -654,6 +653,7 @@
       done: all.filter((n) => n.done).length,
     };
     const list = filteredTasks();
+    const visible = state.taskMode === "list" ? list.slice(0, state.taskLimit) : list;
     const tabs = [
       ["all", "Все"],
       ["today", "Сегодня"],
@@ -698,7 +698,11 @@
         "</form>" : "") +
 
       (state.taskMode === "matrix" ? renderMatrix(list.filter((n) => !n.done)) :
-        (list.length ? groupedTaskList(list) :
+        (list.length ? groupedTaskList(visible) +
+          (list.length > visible.length
+            ? '<div class="load-more"><button class="v-btn" data-act="task-more">Показать ещё ' +
+              Math.min(120, list.length - visible.length) + " из " + (list.length - visible.length) + "</button></div>"
+            : "") :
           emptyState(state.taskFilter === "done" ? "Пока ничего не закрыто." : "Здесь пусто. Добавьте первое дело выше.", "", "")))
     );
   }
@@ -926,7 +930,7 @@
     const scored = [];
     list.forEach((n) => {
       const title = U.titleOfNote(n).toLowerCase();
-      const text = U.plainText(n.html).toLowerCase();
+      const text = U.noteText(n).toLowerCase();
       const tags = (n.tags || []).join(" ").toLowerCase();
       const subject = String(n.subject || "").toLowerCase();
       const url = String(n.url || "").toLowerCase();
@@ -956,7 +960,7 @@
     }
     box.innerHTML = matches.map(({ n }) => {
       const info = U.dueInfo(n.due);
-      const excerpt = U.plainText(n.html);
+      const excerpt = U.noteText(n);
       return '<div class="search-result" data-open="' + esc(n.id) + '">' +
         '<div class="tt"><b>' + mark(U.titleOfNote(n), state.searchQuery) + "</b>" +
           "<span>" + mark(excerpt.slice(0, 130), state.searchQuery) + "</span></div>" +
@@ -1001,23 +1005,27 @@
   }
 
   function quickTask(title, patch) {
-    const clean = String(title || "").trim();
-    if (!clean) return null;
+    const raw = String(title || "").trim();
+    if (!raw) return null;
+    const parsed = U.extractWhen(raw);
+    const clean = parsed.text || raw;
     const sphere = (patch && patch.sphere) || state.taskSphere || TB.model.doc.settings.lastSphere || "work";
-    return TB.model.addNote(Object.assign({
+    const note = Object.assign({
       html: "<div>" + esc(clean) + "</div>",
       kind: "task",
       sphere,
       status: "today",
       boardId: TB.model.ui.boardId,
-    }, patch || {}));
+    }, patch || {});
+    if (parsed.due) note.due = parsed.due;
+    return TB.model.addNote(note);
   }
 
   forms["today-task"] = (form, input) => {
     const n = quickTask(input.value, { due: todayDue(18) });
     if (!n) return false;
     input.value = "";
-    U.toast("Добавлено на сегодня");
+    U.toast(U.dueInfo(n.due) ? "Добавлено: " + U.dueInfo(n.due).label : "Добавлено на сегодня");
     requestAnimationFrame(() => { const el = root.querySelector('[data-form="today-task"] input'); if (el) el.focus(); });
     return true;
   };
@@ -1027,7 +1035,7 @@
     const n = quickTask(input.value, due ? { due } : {});
     if (!n) return false;
     input.value = "";
-    U.toast("Задача добавлена");
+    U.toast(U.dueInfo(n.due) ? "Задача: " + U.dueInfo(n.due).label : "Задача добавлена");
     requestAnimationFrame(() => { const el = root.querySelector('[data-form="task-quick"] input'); if (el) el.focus(); });
     return true;
   };
@@ -1055,7 +1063,7 @@
     const n = quickTask(clean, { due: dateDue(state.calSelected, 18) });
     if (!n) return false;
     input.value = "";
-    U.toast("Запись на " + parseKey(state.calSelected).toLocaleDateString("ru-RU", { day: "numeric", month: "long" }));
+    U.toast(U.dueInfo(n.due) ? "Запись: " + U.dueInfo(n.due).label : "Запись добавлена");
     return true;
   };
 
@@ -1112,14 +1120,21 @@
 
   actions["task-filter"] = (el) => {
     state.taskFilter = el.dataset.filter;
+    state.taskLimit = 120;
     return true;
   };
   actions["task-mode"] = (el) => {
     state.taskMode = el.dataset.mode;
+    state.taskLimit = 120;
     return true;
   };
   actions["task-sphere"] = (el) => {
     state.taskSphere = el.dataset.sphere || "";
+    state.taskLimit = 120;
+    return true;
+  };
+  actions["task-more"] = () => {
+    state.taskLimit += 120;
     return true;
   };
   actions["search-sphere"] = (el) => {

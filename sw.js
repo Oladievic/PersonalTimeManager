@@ -1,5 +1,5 @@
 /* Пробка — офлайн-оболочка PWA */
-const VERSION = "probka-v1.1.0";
+const VERSION = "probka-v1.1.5";
 const CORE = [
   "./",
   "index.html",
@@ -51,6 +51,28 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+const SHARE_CACHE = "probka-share";
+const SHARE_KEY = new URL("__probka_share__", self.registration.scope).href;
+
+async function handleShare(request) {
+  try {
+    const form = await request.formData();
+    const payload = {
+      title: String(form.get("title") || ""),
+      text: String(form.get("text") || ""),
+      url: String(form.get("url") || ""),
+      at: Date.now(),
+    };
+    const cache = await caches.open(SHARE_CACHE);
+    await cache.put(SHARE_KEY, new Response(JSON.stringify(payload), {
+      headers: { "Content-Type": "application/json" },
+    }));
+  } catch (err) {
+    console.warn("Пробка: не удалось разобрать share-target", err);
+  }
+  return Response.redirect(new URL("./?shared=1", self.registration.scope).href, 303);
+}
+
 function isBypassed(url) {
   return url.origin !== self.location.origin ||
     url.pathname.startsWith("/api/") ||
@@ -92,8 +114,12 @@ async function staleWhileRevalidate(request) {
 
 self.addEventListener("fetch", (event) => {
   const request = event.request;
-  if (request.method !== "GET") return;
   const url = new URL(request.url);
+  if (request.method === "POST" && url.origin === self.location.origin && url.searchParams.has("share-target")) {
+    event.respondWith(handleShare(request));
+    return;
+  }
+  if (request.method !== "GET") return;
   if (isBypassed(url)) return;
 
   if (request.mode === "navigate") {

@@ -20,6 +20,7 @@
   let view = { x: 60, y: 40, z: 1 };
   let drag = null;
   let pan = null;
+  let spaceHeld = false;
   let pinch = null;
   const stagePointers = new Map();
   let editingId = null;
@@ -100,7 +101,7 @@
       if (editingId) commitEditor();
       const body = el.querySelector("[data-body]");
       if (!body) return;
-      body.innerHTML = n.html || "";
+      body.innerHTML = U.sanitizeHtml(n.html || "");
       editingId = id;
       TB.model.ui.editing = id;
       body.contentEditable = "true";
@@ -116,6 +117,12 @@
         sel.addRange(range);
       } catch (e) { /* caret is a nicety */ }
       body.addEventListener("blur", () => commitEditor());
+      body.addEventListener("paste", (e) => {
+        const html = e.clipboardData && e.clipboardData.getData("text/html");
+        if (!html) return;
+        e.preventDefault();
+        try { document.execCommand("insertHTML", false, U.sanitizeHtml(html)); } catch (err) { /* ignore */ }
+      });
       body.addEventListener("keydown", (e) => {
         if (e.key === "Escape") {
           e.preventDefault();
@@ -261,7 +268,7 @@
   }
 
   function noteSummary(n) {
-    const text = U.plainText(n.html || "").replace(/\u00a0/g, " ").trim();
+    const text = U.noteText(n).replace(/\u00a0/g, " ").trim();
     const lines = text.split(/\n+/).map((s) => s.trim()).filter(Boolean);
     let title = lines.shift() || U.titleOfNote(n) || "Без названия";
     let excerpt = lines.join(" ");
@@ -278,11 +285,13 @@
     const title = document.createElement("div");
     title.className = "note-title";
     title.textContent = parts.title;
-    const excerpt = document.createElement("div");
-    excerpt.className = "note-excerpt";
-    excerpt.textContent = parts.excerpt || "Открыть карточку";
-    if (!parts.excerpt) excerpt.classList.add("muted");
-    box.append(title, excerpt);
+    box.appendChild(title);
+    if (parts.excerpt) {
+      const excerpt = document.createElement("div");
+      excerpt.className = "note-excerpt";
+      excerpt.textContent = parts.excerpt;
+      box.appendChild(excerpt);
+    }
     return box.outerHTML;
   }
 
@@ -577,7 +586,7 @@
   function bindStage() {
     stage.addEventListener("pointerdown", (e) => {
       if (TB.model.ui.view !== "board") return;
-      if (e.target.closest(".note") || e.target.closest("[data-thread]")) return;
+      if (!spaceHeld && (e.target.closest(".note") || e.target.closest("[data-thread]"))) return;
       if (e.button !== undefined && e.button !== 0 && e.pointerType === "mouse") return;
       if (editingId) commitEditor();
       if (TB.model.ui.linking) clearLinkMode();
@@ -699,6 +708,7 @@
   }
 
   function onNoteDown(e, n, el) {
+    if (spaceHeld) return;
     if (e.button !== undefined && e.button !== 0 && e.pointerType === "mouse") return;
     if (editingId === n.id) return;
     if (TB.model.ui.linking) return;
@@ -1026,9 +1036,9 @@
     const count = TB.model.notes().length;
     if (hint) {
       if (!count) {
-        hint.innerHTML = "Двойной клик по доске — новая заметка. Или кнопка «Заметка» справа.";
+        hint.innerHTML = "Клик по бумажке — подробности. Двойной клик по доске — новая заметка. Или кнопка «Заметка» справа.";
       } else {
-        hint.innerHTML = 'Двойной клик по доске — новая заметка. Тяни за точку <span class="hint-dot"></span> на наклейке, чтобы протянуть нить.';
+        hint.innerHTML = 'Клик по бумажке — подробности. Двойной клик по доске — новая заметка. Тяни за точку <span class="hint-dot"></span> на наклейке, чтобы протянуть нить.';
       }
     }
   }
@@ -1047,6 +1057,10 @@
   }
 
   TB.board = board;
+  TB.board.setSpacePan = function (on) {
+    spaceHeld = !!on;
+    if (frame) frame.classList.toggle("space-pan", spaceHeld);
+  };
   TB.board.renderThreads = renderThreads;
   TB.board.commitEditor = commitEditor;
   TB.board.zoomAt = zoomAt;

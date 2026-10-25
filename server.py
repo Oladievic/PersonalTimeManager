@@ -25,6 +25,7 @@ import hmac
 import html
 import json
 import os
+import posixpath
 import re
 import secrets
 import socket
@@ -39,6 +40,40 @@ from urllib.parse import unquote, urlparse
 
 ROOT = Path(__file__).resolve().parent
 MCP_PROTOCOL = "2025-06-18"
+
+# Всё, что не должно попадать в раздачу статики.  Проверка идёт по
+# нормализованному пути, поэтому «/./data/...», «/docs/../data/...» и
+# URL-encoded варианты не обходят запрет.
+STATIC_DENY_DIRS = {
+    "data", ".git", ".opencode", ".idea", ".vscode", ".venv", "venv",
+    "node_modules", "__pycache__", "tools",
+}
+STATIC_DENY_FILES = {
+    "config.json", "doc.json", ".env", ".gitignore",
+}
+STATIC_DENY_EXT = {
+    ".py", ".pyc", ".pyo", ".bat", ".cmd", ".ps1", ".sh",
+    ".json", ".log", ".tmp", ".bak", ".sqlite", ".sqlite3", ".db",
+    ".pem", ".key", ".crt", ".p12",
+}
+
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "X-Permitted-Cross-Domain-Policies": "none",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    # Приложение не использует inline-скрипты и eval.  Стили-атрибуты
+    # (цвет наклейки и т.п.) разрешены, поэтому style-src с unsafe-inline.
+    "Content-Security-Policy": (
+        "default-src 'self'; "
+        "base-uri 'self'; object-src 'none'; frame-ancestors 'none'; "
+        "script-src 'self'; style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: blob: https:; media-src 'self' blob: https:; "
+        "font-src 'self'; connect-src 'self' http: https:; "
+        "worker-src 'self'; manifest-src 'self'; form-action 'self'"
+    ),
+}
 SUPPORTED_PROTOCOLS = {"2024-11-05", "2025-03-26", "2025-06-18"}
 SERVER_NAME = "probka"
 SERVER_VERSION = "1.0.0"
@@ -438,6 +473,11 @@ class Store:
             cfg["createdAt"] = now_ms()
             changed = True
         cfg.setdefault("name", "Пробка")
+        if "allowedOrigins" not in cfg:
+            # По умолчанию CORS выключен: приложение работает с того же
+            # origin.  Список нужен только для отдельного клиента.
+            cfg["allowedOrigins"] = []
+            changed = True
         if changed or not path.exists():
             self._atomic_write(path, cfg)
             try:
@@ -445,6 +485,20 @@ class Store:
             except OSError:
                 pass
         return cfg
+
+    def rotate_token(self) -> str:
+        """Сгенерировать новый токен и атомарно записать config.json."""
+        with self.lock:
+            self.config["token"] = secrets.token_hex(24)
+            self.config["rotatedAt"] = now_ms()
+            path = self.dir / "config.json"
+            self._atomic_write(path, self.config)
+            try:
+                os.chmod(path, 0o600)
+            except OSError:
+                pass
+            self.token = self.config["token"]
+            return self.token
 
     # -- документ ----------------------------------------------------------
     def _load_doc(self):
@@ -516,15 +570,16 @@ class Store:
                 self._save_unlocked()
             return result, self.revision, copy.deepcopy(self.doc)
 
-    def merge_from_client(self, client_doc: dict):
+    def merge_from_client(self, client_doc: dict, base_revision: int | None = None):
         with self.lock:
+            conflict = bool(base_revision) and int(base_revision) != int(self.revision)
             merged = merge_docs(self.doc, client_doc)
             if merged != self.doc:
                 self.doc = merged
                 self.revision += 1
                 self.updated_at = now_ms()
                 self._save_unlocked()
-            return self.revision, copy.deepcopy(self.doc)
+            return self.revision, copy.deepcopy(self.doc), conflict
 
 
 # ---------------------------------------------------------------------------
@@ -1402,19 +1457,78 @@ class Handler(SimpleHTTPRequestHandler):
         except Exception:
             line = " ".join(str(a) for a in args)
         line = re.sub(r"/mcp/[A-Za-z0-9_\-]+", "/mcp/***", line)
+        line = re.sub(r"(?i)([?&]token=)[^&\s]+", r"\1***", line)
+        line = re.sub(r"(?i)(authorization:\s*bearer\s+)\S+", r"\1***", line)
         sys.stderr.write("%s  %s\n" % (dt.datetime.now().strftime("%H:%M:%S"), line))
 
+    def _cors_origin(self) -> str | None:
+        """Разрешаем CORS только same-origin и явному списку из config.json."""
+        origin = (self.headers.get("Origin") or "").strip()
+        if not origin:
+            return None
+        try:
+            parsed = urlparse(origin)
+        except Exception:
+            return None
+        if parsed.scheme not in ("http", "https"):
+            return None
+        host = (self.headers.get("Host") or "").strip().lower()
+        if host and parsed.netloc.lower() == host:
+            return origin
+        allowed = self.server.store.config.get("allowedOrigins") or []
+        if isinstance(allowed, str):
+            allowed = [allowed]
+        return origin if origin in allowed else None
+
     def end_headers(self):
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers",
-                         "Content-Type, Authorization, X-Probka-Token, Mcp-Session-Id, MCP-Protocol-Version, Last-Event-ID")
-        self.send_header("Access-Control-Expose-Headers", "Mcp-Session-Id, MCP-Protocol-Version")
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("Referrer-Policy", "no-referrer")
+        origin = self._cors_origin()
+        if origin:
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers",
+                             "Content-Type, Authorization, X-Probka-Token, Mcp-Session-Id, MCP-Protocol-Version, Last-Event-ID")
+            self.send_header("Access-Control-Expose-Headers", "Mcp-Session-Id, MCP-Protocol-Version")
+        for key, value in SECURITY_HEADERS.items():
+            self.send_header(key, value)
         self.send_header("Cache-Control", getattr(self, "_cache_control", None) or "no-cache, must-revalidate")
         self._cache_control = None
         super().end_headers()
+
+    def list_directory(self, path):
+        # Содержимое папок не показываем даже если index.html отсутствует.
+        self.send_error(404, "Not found")
+        return None
+
+    def _static_allowed(self, raw_path: str) -> bool:
+        """Проверка нормализованного пути до того, как SimpleHTTPRequestHandler
+        успеет раскрыть «..» и отдать приватный файл."""
+        try:
+            decoded = unquote(raw_path or "/")
+        except Exception:
+            return False
+        if "\x00" in decoded:
+            return False
+        decoded = decoded.replace("\\", "/")
+        norm = posixpath.normpath("/" + decoded.lstrip("/"))
+        parts = [p for p in norm.split("/") if p and p not in (".", "..")]
+        if any(p.startswith(".") for p in parts):
+            return False
+        if any(p.lower() in STATIC_DENY_DIRS for p in parts):
+            return False
+        if parts:
+            name = parts[-1].lower()
+            if name in STATIC_DENY_FILES:
+                return False
+            if any(name.endswith(ext) for ext in STATIC_DENY_EXT):
+                return False
+        try:
+            target = (ROOT / Path(*parts)).resolve()
+        except (OSError, RuntimeError, ValueError):
+            return False
+        if target != ROOT and ROOT not in target.parents:
+            return False
+        return True
 
     def _send_json(self, status: int, payload, extra: dict | None = None):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -1439,6 +1553,8 @@ class Handler(SimpleHTTPRequestHandler):
         for key, value in (extra or {}).items():
             self.send_header(key, value)
         self.end_headers()
+        if self.command == "HEAD":
+            return
         try:
             self.wfile.write(body)
         except (BrokenPipeError, ConnectionResetError):
@@ -1494,8 +1610,10 @@ class Handler(SimpleHTTPRequestHandler):
 
     # -- HTTP методы -------------------------------------------------------
     def do_OPTIONS(self):
+        # Браузер получит CORS-заголовки только для разрешённого origin.
         self.send_response(204)
         self.send_header("Content-Length", "0")
+        self.send_header("Access-Control-Max-Age", "600")
         self.end_headers()
 
     def do_GET(self):
@@ -1552,11 +1670,7 @@ class Handler(SimpleHTTPRequestHandler):
             return
 
         # статика и защита приватных файлов
-        segments = [s for s in path.split("/") if s]
-        if segments and segments[0] in {"data", ".git", ".opencode", "tools", "__pycache__"}:
-            self._send_text(404, "Not found")
-            return
-        if segments and (segments[0] == "server.py" or segments[0].endswith((".py", ".bat", ".ps1", ".tmp"))):
+        if not self._static_allowed(path):
             self._send_text(404, "Not found")
             return
         super().do_GET()
@@ -1567,6 +1681,9 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_response(405)
             self.send_header("Content-Length", "0")
             self.end_headers()
+            return
+        if not self._static_allowed(parsed.path):
+            self._send_text(404, "Not found")
             return
         super().do_HEAD()
 
@@ -1591,12 +1708,16 @@ class Handler(SimpleHTTPRequestHandler):
             self._send_json(400, {"ok": False, "error": "Нужен объект {doc: {...}}"})
             return
         try:
-            revision, merged = self.server.store.merge_from_client(doc)
+            base_revision = int(payload.get("baseRevision")) if payload.get("baseRevision") not in (None, "") else None
+        except (TypeError, ValueError):
+            base_revision = None
+        try:
+            revision, merged, conflict = self.server.store.merge_from_client(doc, base_revision)
         except Exception as exc:
             self._send_json(500, {"ok": False, "error": f"Ошибка слияния: {exc}"})
             return
         self._send_json(200, {
-            "ok": True, "revision": revision,
+            "ok": True, "revision": revision, "conflict": conflict,
             "updatedAt": self.server.store.updated_at,
             "doc": merged,
         })
@@ -1738,6 +1859,8 @@ def main(argv=None):
     parser.add_argument("--data", default=str(ROOT / "data"), help="Папка данных")
     parser.add_argument("--stdio", action="store_true", help="MCP через stdin/stdout для Claude Desktop")
     parser.add_argument("--open", action="store_true", help="Открыть приложение в браузере")
+    parser.add_argument("--rotate-token", action="store_true",
+                        help="Сгенерировать новый MCP-токен и выйти (нужно обновить URL в клиентах)")
     args = parser.parse_args(argv)
 
     try:
@@ -1747,6 +1870,11 @@ def main(argv=None):
         pass
 
     store = Store(Path(args.data).resolve())
+    if args.rotate_token:
+        token = store.rotate_token()
+        print(f"Токен обновлён. Новый MCP-адрес: http://localhost:{args.port}/mcp/{token}")
+        print("Обновите URL в ChatGPT / Claude и в настройках «Связь с MCP» приложения.")
+        return
     if args.stdio:
         run_stdio(store)
         return

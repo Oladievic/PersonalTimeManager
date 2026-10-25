@@ -314,7 +314,8 @@
       note.checklist = Array.isArray(note.checklist) ? note.checklist.map((c) => ({ id: c.id || uid("c"), text: String(c.text || ""), done: !!c.done })) : [];
       note.attachments = Array.isArray(note.attachments) ? note.attachments : [];
       note.tags = Array.isArray(note.tags) ? note.tags.map(String) : [];
-      note.html = typeof note.html === "string" ? note.html : "";
+      note.html = U.sanitizeHtml(typeof note.html === "string" ? note.html : "");
+      note.url = U.safeUrl(note.url);
       note.meta = note.meta && typeof note.meta === "object" ? note.meta : {};
       note.archived = !!note.archived;
       note.kind = note.kind || "task";
@@ -363,9 +364,23 @@
     else if (repeat === "weekdays") {
       do { next.setDate(next.getDate() + 1); } while (next.getDay() === 0 || next.getDay() === 6);
     } else if (repeat === "weekly") next.setDate(next.getDate() + 7);
-    else if (repeat === "monthly") next.setMonth(next.getMonth() + 1);
-    else if (repeat === "yearly") next.setFullYear(next.getFullYear() + 1);
-    else return null;
+    else if (repeat === "monthly") {
+      // 31 января → 28/29 февраля, а не 3 марта.
+      const day = d.getDate();
+      next.setDate(1);
+      next.setMonth(next.getMonth() + 1);
+      const last = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
+      next.setDate(Math.min(day, last));
+    } else if (repeat === "yearly") {
+      // 29 февраля → 28 февраля, а не 1 марта.
+      const day = d.getDate();
+      const month = d.getMonth();
+      next.setDate(1);
+      next.setFullYear(next.getFullYear() + 1);
+      next.setMonth(month);
+      const last = new Date(next.getFullYear(), month + 1, 0).getDate();
+      next.setDate(Math.min(day, last));
+    } else return null;
     const pad = (n) => String(n).padStart(2, "0");
     return next.getFullYear() + "-" + pad(next.getMonth() + 1) + "-" + pad(next.getDate()) + "T" + pad(next.getHours()) + ":" + pad(next.getMinutes());
   }
@@ -557,6 +572,7 @@
       if (!(opts && opts.silentUndo)) this.snapshot();
       Object.assign(note, patch, { updated: Date.now() });
       if (patch && typeof patch.html === "string") note.html = U.sanitizeHtml(patch.html);
+      if (patch && patch.url !== undefined) note.url = U.safeUrl(patch.url);
       if (patch && patch.status) note.done = patch.status === "done";
       if (patch && patch.sphere) this.doc.settings.lastSphere = patch.sphere;
       this.changed((opts && opts.scope) || "all");
@@ -636,6 +652,14 @@
       if (!note) return;
       if (!(opts && opts.silentUndo)) this.snapshot();
       const wasDone = note.done;
+      note.meta = note.meta && typeof note.meta === "object" ? note.meta : {};
+      if (status === "done" && !wasDone) {
+        // Запоминаем, откуда пришли: «Входящие» должны вернуться во
+        // «Входящие», а не в «Сегодня».
+        note.meta.prevStatus = ["inbox", "today", "doing"].includes(note.status) ? note.status : "today";
+      } else if (status !== "done") {
+        delete note.meta.prevStatus;
+      }
       note.status = status;
       note.done = status === "done";
       note.completedAt = note.done ? Date.now() : null;
@@ -650,7 +674,12 @@
     toggleDone(id) {
       const note = this.note(id);
       if (!note) return;
-      this.setStatus(id, note.done ? "today" : "done");
+      if (!note.done) {
+        this.setStatus(id, "done");
+        return;
+      }
+      const back = (note.meta && note.meta.prevStatus) || "today";
+      this.setStatus(id, ["inbox", "today", "doing"].includes(back) ? back : "today");
     },
 
     _spawnNext(note) {
@@ -672,6 +701,8 @@
       copy.archivedAt = null;
       copy.z = this.maxZ(note.boardId) + 1;
       copy.checklist = (copy.checklist || []).map((c) => ({ id: uid("c"), text: c.text, done: false }));
+      copy.meta = Object.assign({}, copy.meta || {});
+      delete copy.meta.prevStatus;
       note.spawnedId = copy.id;
       this.doc.notes.push(copy);
     },
@@ -733,13 +764,17 @@
     },
 
     capture(text, opts) {
-      const clean = String(text || "").trim();
-      if (!clean) return null;
+      const raw = String(text || "").trim();
+      if (!raw) return null;
+      const hashtags = (raw.match(/(^|\s)#[^\s#]+/g) || []).map((x) => x.trim());
+      const withoutTags = raw.replace(/(^|\s)#[^\s#]+/g, " ").replace(/\s+/g, " ").trim() || raw;
+      const parsed = U.extractWhen(withoutTags);
+      const clean = parsed.text || withoutTags;
       const inbox = this.inboxBoard();
       const count = this.notes(inbox.id).length;
       const col = count % 3;
       const row = Math.floor(count / 3);
-      const n = this.addNote(Object.assign({
+      const patch = Object.assign({
         boardId: inbox.id,
         x: 100 + col * 250 + (row % 2) * 14,
         y: 100 + row * 190,
@@ -751,8 +786,10 @@
         kind: "note",
         pin: "tape",
         color: "paper",
-      }, opts || {}));
-      return n;
+        tags: (opts && opts.tags) || U.tagsFrom(hashtags.join(",")),
+      }, opts || {});
+      if (parsed.due && !(opts && opts.due)) patch.due = parsed.due;
+      return this.addNote(patch);
     },
 
     logFocus(noteId, minutes) {

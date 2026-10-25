@@ -102,15 +102,187 @@
       .trim();
   }
 
-  function firstLine(html, fallback) {
-    const text = plainText(html);
+  function firstLineFromText(text, fallback) {
     if (!text) return fallback || "";
     const line = text.split(/\n|\r/).map((s) => s.trim()).find(Boolean) || text;
     return line.length > 80 ? line.slice(0, 80) + "…" : line;
   }
 
+  function firstLine(html, fallback) {
+    return firstLineFromText(plainText(html), fallback);
+  }
+
+  // Текст и заголовок заметки нужны почти в каждом разделе.  Кэш по
+  // ссылке + updated/html избавляет от повторного парсинга HTML на
+  // больших документах (1000 заметок).
+  const textCache = new WeakMap();
+  function noteText(note) {
+    if (!note || typeof note.html !== "string") return "";
+    const stamp = Number(note.updated) || 0;
+    const cached = textCache.get(note);
+    if (cached && cached.stamp === stamp && cached.html === note.html) return cached.text;
+    const text = plainText(note.html);
+    textCache.set(note, { stamp, html: note.html, text, title: firstLineFromText(text, "Без названия") });
+    return text;
+  }
+
+  function noteTextCache(note) {
+    if (!note) return null;
+    const cached = textCache.get(note);
+    if (cached && cached.stamp === (Number(note.updated) || 0) && cached.html === note.html) return cached;
+    noteText(note);
+    return textCache.get(note) || null;
+  }
+
   function titleOfNote(note) {
-    return firstLine(note.html, "Без названия");
+    const cached = noteTextCache(note);
+    return cached ? cached.title : "Без названия";
+  }
+
+  function safeUrl(value, opts) {
+    const s = String(value == null ? "" : value).trim();
+    if (!s) return "";
+    try {
+      const u = new URL(s, location.href);
+      if (u.protocol === "http:" || u.protocol === "https:") return s;
+      if ((!opts || opts.mailto !== false) && u.protocol === "mailto:") return s;
+    } catch (e) { /* invalid URL */ }
+    return "";
+  }
+
+  const MONTH_ALIASES = {
+    янв: 0, января: 0, январь: 0,
+    фев: 1, февраля: 1, февраль: 1,
+    мар: 2, марта: 2, март: 2,
+    апр: 3, апреля: 3, апрель: 3,
+    мая: 4, май: 4,
+    июн: 5, июня: 5, июнь: 5,
+    июл: 6, июля: 6, июль: 6,
+    авг: 7, августа: 7, август: 7,
+    сен: 8, сент: 8, сентября: 8, сентябрь: 8,
+    окт: 9, октября: 9, октябрь: 9,
+    ноя: 10, ноября: 10, ноябрь: 10,
+    дек: 11, декабря: 11, декабрь: 11,
+  };
+  const WEEKDAY_ALIASES = {
+    вс: 0, воскресенье: 0,
+    пн: 1, понедельник: 1,
+    вт: 2, вторник: 2,
+    ср: 3, среда: 3, среду: 3,
+    чт: 4, четверг: 4,
+    пт: 5, пятница: 5, пятницу: 5,
+    сб: 6, суббота: 6, субботу: 6,
+  };
+
+  function parseClock(value) {
+    const m = String(value || "").match(/(\d{1,2})(?:[:.](\d{2}))/);
+    if (!m) return null;
+    const h = Number(m[1]);
+    const min = Number(m[2] || 0);
+    if (h > 23 || min > 59) return null;
+    return { h, min };
+  }
+
+  function dateAt(base, dayOffset, clock) {
+    const d = new Date(base.getFullYear(), base.getMonth(), base.getDate());
+    d.setDate(d.getDate() + dayOffset);
+    d.setHours(clock ? clock.h : 18, clock ? clock.min : 0, 0, 0);
+    return d;
+  }
+
+  /**
+   * Разбирает «завтра 18:00», «в пятницу», «через 2 дня», «25 октября»
+   * и вырезает найденный фрагмент из названия.  Возвращает due в
+   * локальном формате datetime-local.
+   */
+  function extractWhen(input, baseDate) {
+    const original = String(input || "");
+    if (!original.trim()) return { due: null, text: original };
+    const base = baseDate ? new Date(baseDate) : new Date();
+    const lower = original.toLowerCase();
+    const patterns = [];
+    const add = (re, fn) => patterns.push({ re, fn });
+
+    // «25.10», «25.10.2026», «2026-10-25»
+    add(/(?:^|[\s,;])(?:до|к|на)?\s*(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?(?=$|[\s,;])/, (m) => {
+      let year = m[3] ? Number(m[3]) : base.getFullYear();
+      if (year < 100) year += 2000;
+      const day = Number(m[1]), month = Number(m[2]) - 1;
+      const d = new Date(year, month, day);
+      if (isNaN(d.getTime()) || d.getDate() !== day) return null;
+      return d;
+    });
+    add(/(?:^|[\s,;])\s*(\d{4})-(\d{1,2})-(\d{1,2})(?=$|[\s,;])/, (m) => {
+      const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+      return isNaN(d.getTime()) ? null : d;
+    });
+    // «25 октября», «25 окт»
+    add(/(?:^|[\s,;])(?:до|к|на)?\s*(\d{1,2})\s+(янв(?:аря|арь)?|фев(?:раля|раль)?|мар(?:та|т)?|апр(?:еля|ель)?|мая|май|июн(?:я|ь)?|июл(?:я|ь)?|авг(?:уста|уст)?|сен(?:тября|т)?|окт(?:ября|ябрь)?|ноя(?:бря|брь)?|дек(?:абря|абрь)?)(?=$|[\s,;])/, (m) => {
+      const key = Object.keys(MONTH_ALIASES).find((k) => m[2].startsWith(k.slice(0, 3)));
+      const month = key ? MONTH_ALIASES[key] : null;
+      if (month == null) return null;
+      const day = Number(m[1]);
+      let d = new Date(base.getFullYear(), month, day);
+      if (d.getMonth() !== month || d.getDate() !== day) return null;
+      // Если дата уже прошла — берём следующий год.
+      const today = new Date(base.getFullYear(), base.getMonth(), base.getDate());
+      if (d < today) d = new Date(base.getFullYear() + 1, month, day);
+      return d;
+    });
+    // «сегодня», «завтра», «послезавтра», «через N дней/недель»
+    add(/(?:^|[\s,;])(?:на\s+)?(сегодня|завтра|послезавтра)(?=$|[\s,;])/, (m) => {
+      const offset = m[1] === "сегодня" ? 0 : m[1] === "завтра" ? 1 : 2;
+      return dateAt(base, offset, null);
+    });
+    add(/(?:^|[\s,;])(?:через|спустя)\s+(\d{1,3})\s+(день|дня|дней|неделю|недели|недель)(?=$|[\s,;])/, (m) => {
+      const n = Number(m[1]);
+      const days = /недел/.test(m[2]) ? n * 7 : n;
+      return dateAt(base, days, null);
+    });
+    // «в пятницу», «в пн»
+    add(/(?:^|[\s,;])(?:в|на|к)\s+(воскресенье|понедельник|вторник|сред[ау]|четверг|пятниц[ау]|суббот[ау]|вс|пн|вт|ср|чт|пт|сб)(?=$|[\s,;])/, (m) => {
+      const key = Object.keys(WEEKDAY_ALIASES).find((k) => m[1].startsWith(k.slice(0, 2)));
+      if (key == null) return null;
+      const want = WEEKDAY_ALIASES[key];
+      let offset = (want - base.getDay() + 7) % 7;
+      if (offset === 0) offset = 7;
+      return dateAt(base, offset, null);
+    });
+
+    for (const p of patterns) {
+      const m = lower.match(p.re);
+      if (!m) continue;
+      const d = p.fn(m);
+      if (!d) continue;
+      const clockMatch = lower.slice(m.index + m[0].length).match(/^\s*(?:в|к|до)?\s*(\d{1,2}[:.]\d{2})(?=$|[\s,;])/);
+      let clock = null;
+      let end = m.index + m[0].length;
+      if (clockMatch) {
+        clock = parseClock(clockMatch[1]);
+        if (clock) end += clockMatch[0].length;
+      }
+      if (clock) d.setHours(clock.h, clock.min, 0, 0);
+      const text = (original.slice(0, m.index) + " " + original.slice(end))
+        .replace(/\s+/g, " ")
+        .replace(/^[\s,;.-]+|[\s,;.-]+$/g, "")
+        .trim();
+      return { due: toLocalInput(d), text: text || original.trim() };
+    }
+
+    // Только время: «в 15:30» / «к 18:00».  Если время уже прошло,
+    // ставим на завтра, чтобы не создавать просрочку сразу.
+    const timeOnly = lower.match(/(?:^|[\s,;])(?:в|к|до)\s+(\d{1,2}[:.]\d{2})(?=$|[\s,;])/);
+    if (timeOnly) {
+      const clock = parseClock(timeOnly[1]);
+      if (clock) {
+        let d = dateAt(base, 0, clock);
+        if (d.getTime() <= base.getTime()) d = dateAt(base, 1, clock);
+        const text = (original.slice(0, timeOnly.index) + " " + original.slice(timeOnly.index + timeOnly[0].length))
+          .replace(/\s+/g, " ").replace(/^[\s,;.-]+|[\s,;.-]+$/g, "").trim();
+        return { due: toLocalInput(d), text: text || original.trim() };
+      }
+    }
+    return { due: null, text: original };
   }
 
   const MONTHS_SHORT = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
@@ -265,7 +437,8 @@
 
   TB.util = {
     $, $$, uid, clamp, debounce, escapeHtml, sanitizeHtml, plainText, firstLine,
-    titleOfNote, dueInfo, toLocalInput, fmtDate, fmtBytes, fmtClock, tagsFrom,
+    noteText, titleOfNote, safeUrl, extractWhen,
+    dueInfo, toLocalInput, fmtDate, fmtBytes, fmtClock, tagsFrom,
     hashHue, isTypingTarget, toast, beep, downloadBlob, assign, parseDue,
     MONTHS_SHORT, WEEKDAYS,
   };

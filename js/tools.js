@@ -15,8 +15,33 @@
   const tools = {
     init() {
       this.startReminders();
+      this.startBackups();
       try { this.installDock(); } catch (e) { /* not critical */ }
       window.addEventListener("online", () => this.startReminders());
+    },
+
+    startBackups() {
+      const check = () => this.maybeAutoBackup();
+      setTimeout(check, 6000);
+      setInterval(check, 6 * 3600 * 1000);
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) check();
+      });
+    },
+
+    async maybeAutoBackup(force) {
+      if (!TB.store || TB.store.mode !== "idb") return false;
+      let last = 0;
+      try { last = Number(localStorage.getItem("probka.autoBackupAt") || 0) || 0; } catch (e) { last = 0; }
+      if (!force && Date.now() - last < 24 * 3600 * 1000) return false;
+      try {
+        await TB.store.createBackup(TB.model.doc, "авто за 24 часа");
+        try { localStorage.setItem("probka.autoBackupAt", String(Date.now())); } catch (e) { /* ignore */ }
+        return true;
+      } catch (err) {
+        console.warn("Пробка: авто-копия не создана", err);
+        return false;
+      }
     },
 
     /* ------------------------------ захват ------------------------------ */
@@ -161,7 +186,7 @@
         }
         const found = TB.model.doc.notes.filter((n) => !n.archived).map((n) => {
           const title = U.titleOfNote(n).toLowerCase();
-          const text = U.plainText(n.html).toLowerCase();
+          const text = U.noteText(n).toLowerCase();
           const tags = (n.tags || []).join(" ").toLowerCase();
           let score = 0;
           if (title === q) score = 120;
@@ -180,7 +205,7 @@
         results.innerHTML = items.map((n, i) => {
           const info = U.dueInfo(n.due);
           return '<div class="search-result' + (i === 0 ? " active" : "") + '" data-i="' + i + '">' +
-            '<div class="tt"><b>' + esc(U.titleOfNote(n)) + '</b><span>' + esc(U.plainText(n.html).replace(/\s+/g, " ").slice(0, 120)) + "</span></div>" +
+            '<div class="tt"><b>' + esc(U.titleOfNote(n)) + '</b><span>' + esc(U.noteText(n).replace(/\s+/g, " ").slice(0, 120)) + "</span></div>" +
             '<div class="meta">' + (info ? '<span class="due-chip ' + (info.diff < 0 ? "overdue" : info.diff === 0 ? "today" : "") + '">' + esc(info.label) + "</span>" : "") +
             (n.done ? '<span class="kind-chip">готово</span>' : "") + "</div></div>";
         }).join("");

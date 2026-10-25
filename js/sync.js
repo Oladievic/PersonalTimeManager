@@ -35,6 +35,8 @@
     _timer: null,
     _pollTimer: null,
     _pushTimer: null,
+    _retryTimer: null,
+    _retryDelay: 0,
     _busy: false,
     _applying: false,
     _dirty: false,
@@ -49,17 +51,21 @@
         setTimeout(() => this.push(true), 1200);
       }
       window.addEventListener("online", () => {
-        if (this.cfg.enabled) {
-          this.paintChrome("ok");
-          this.poll();
-        }
+        if (!this.cfg.enabled) return;
+        this._status = "connecting";
+        this.paintChrome();
+        if (this._dirty) this.push(false, this._localSeq);
+        else this.poll();
       });
       window.addEventListener("offline", () => {
         this._status = this.cfg.enabled ? "offline" : "off";
+        this._message = this.cfg.enabled ? "Нет сети — изменения ждут отправки" : "";
         this.paintChrome();
       });
       document.addEventListener("visibilitychange", () => {
-        if (!document.hidden && this.cfg.enabled) this.poll();
+        if (document.hidden || !this.cfg.enabled) return;
+        if (this._dirty) this.push(false, this._localSeq);
+        else this.poll();
       });
     },
 
@@ -100,22 +106,44 @@
       this.saveConfig();
       clearInterval(this._pollTimer);
       clearTimeout(this._pushTimer);
+      clearTimeout(this._retryTimer);
       this._pushTimer = null;
+      this._retryTimer = null;
+      this._retryDelay = 0;
       this._status = "off";
       this._message = "Выключено";
       this.paintChrome();
     },
 
     schedulePush() {
-      if (!this.enabled() || !TB.model.doc) return;
+      if (!this.enabled() || !TB.model.doc || this._applying) return;
       this._dirty = true;
       this._localSeq += 1;
       clearTimeout(this._pushTimer);
+      clearTimeout(this._retryTimer);
+      this._retryTimer = null;
       const seq = this._localSeq;
       this._pushTimer = setTimeout(() => {
         this._pushTimer = null;
         this.push(false, seq);
       }, PUSH_MS);
+      this._message = "Есть изменения — отправлю автоматически";
+      this.paintChrome();
+    },
+
+    _scheduleRetry(message) {
+      if (!this.enabled() || !this._dirty) return;
+      this._retryDelay = Math.min(60000, Math.max(2000, (this._retryDelay || 2000) * 2));
+      clearTimeout(this._retryTimer);
+      const seq = this._localSeq;
+      this._retryTimer = setTimeout(() => {
+        this._retryTimer = null;
+        this.push(false, seq);
+      }, this._retryDelay);
+      this._message = (message || "Нет связи") + " · повтор через " + Math.round(this._retryDelay / 1000) + " с";
+      this._status = navigator.onLine === false ? "offline" : "error";
+      this.paintChrome();
+      this.paintPanel();
     },
 
     async request(path, options) {
@@ -227,8 +255,15 @@
 
     async push(force, seqAtStart) {
       if (!this.enabled() || !TB.model.doc) return false;
-      if (this._busy) return false;
+      if (this._busy) {
+        this._scheduleRetry("Синхронизация уже идёт");
+        return false;
+      }
       if (this._applying) return false;
+      clearTimeout(this._pushTimer);
+      this._pushTimer = null;
+      clearTimeout(this._retryTimer);
+      this._retryTimer = null;
       this._busy = true;
       this._status = "sync";
       this._message = "Отправляю…";
@@ -242,23 +277,31 @@
         this.cfg.revision = Number(data.revision) || this.cfg.revision || 0;
         this.cfg.lastSync = Date.now();
         this.saveConfig();
+        if (data.conflict && data.doc) {
+          // Слияние уже выполнено на сервере, но пользователь должен знать,
+          // что данные пришли с другого устройства.  Перед применением —
+          // локальная копия на случай неожиданного merge.
+          try { await TB.store.createBackup(TB.model.doc, "перед слиянием с сервером"); } catch (e) { /* ignore */ }
+          U.toast("Данные объединены с сервером — проверьте записи", "warn");
+        }
         if (data.doc && seq === this._localSeq) {
           this._dirty = false;
+          this._retryDelay = 0;
           await this.applyRemote(data.doc);
         } else if (data.doc) {
           this._dirty = true;
           this.schedulePush();
         }
         this._status = "ok";
-        this._message = "Синхронизировано";
+        this._retryDelay = 0;
+        this._message = data.conflict ? "Синхронизировано с объединением" : "Синхронизировано";
         this.paintChrome();
         this.paintPanel();
         return true;
       } catch (err) {
         this._status = navigator.onLine === false ? "offline" : "error";
         this._message = err.message || "Не удалось отправить";
-        this.paintChrome();
-        this.paintPanel();
+        this._scheduleRetry(this._message);
         return false;
       } finally {
         this._busy = false;
@@ -266,8 +309,24 @@
     },
 
     async pullNow() {
+      let yes = true;
+      if (TB.overlays && TB.overlays.confirm) {
+        yes = await TB.overlays.confirm({
+          title: "Скачать данные с сервера?",
+          text: "Локальные данные будут заменены серверной версией. Перед этим создам резервную копию — её можно будет восстановить в настройках.",
+          ok: "Скачать",
+          danger: true,
+        });
+      }
+      if (!yes) return false;
       const ok = await this.check();
       if (!ok) return false;
+      try {
+        await TB.store.createBackup(TB.model.doc, "перед загрузкой с сервера");
+      } catch (err) {
+        U.toast("Не удалось создать копию: " + (err.message || "хранилище"), "error");
+        return false;
+      }
       return this.poll(true);
     },
 
@@ -299,6 +358,7 @@
 
     statusLabel() {
       if (!this.cfg.enabled) return "";
+      if (this._dirty) return "MCP: есть изменения";
       const labels = {
         off: "MCP выкл",
         connecting: "MCP: проверка…",
